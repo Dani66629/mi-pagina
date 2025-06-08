@@ -16,7 +16,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const ADMIN_EMAIL = 'tefita_2025@gmail.com';
+  const ADMIN_EMAIL = 'daniflores6662@gmail.com'; // Actualizado al nuevo email
 
   useEffect(() => {
     const getSessionAndSetUser = async () => {
@@ -33,7 +33,6 @@ export const AuthProvider = ({ children }) => {
       if (session?.user && session.user.email === ADMIN_EMAIL && session.user.email_confirmed_at) {
         setUser(session.user);
       } else if (session?.user) {
-        // User exists but is not the admin or email not confirmed, sign them out
         await supabase.auth.signOut();
         setUser(null);
       } else {
@@ -50,8 +49,6 @@ export const AuthProvider = ({ children }) => {
         if (session?.user && session.user.email === ADMIN_EMAIL && session.user.email_confirmed_at) {
           setUser(session.user);
         } else if (session?.user) {
-          // If user is signed in but not admin or email not confirmed, ensure they are signed out from our app state and Supabase.
-           // Check if current app user state is not null before signing out to prevent potential loops if already signed out.
           if (user !== null) { 
             await supabase.auth.signOut();
           }
@@ -66,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [ADMIN_EMAIL]); // Removed 'user' from dependency array to prevent re-runs based on its own state change
+  }, [ADMIN_EMAIL]);
 
   const login = async (email, password) => {
     setLoading(true);
@@ -77,7 +74,7 @@ export const AuthProvider = ({ children }) => {
       if (error.message === 'Email not confirmed') {
         toast({
           title: "Email no confirmado",
-          description: "Por favor, confirma tu email para poder iniciar sesión. Si ya lo hiciste, espera unos momentos e intenta de nuevo.",
+          description: "Por favor, confirma tu email para poder iniciar sesión. Si ya lo hiciste, o la confirmación está desactivada, espera unos momentos e intenta de nuevo.",
           variant: "destructive",
         });
       } else {
@@ -100,19 +97,16 @@ export const AuthProvider = ({ children }) => {
       return false;
     }
 
-    // Since you've confirmed email confirmation is off in Supabase settings,
-    // users created should be auto-confirmed. If an old user still has this issue,
-    // they'd need re-creation with confirmation off, or manual confirmation.
-    // For new users, email_confirmed_at should be set.
-    // We still check it here as a safeguard or if settings change.
+    // Asumimos que si "Enable email confirmations" está DESACTIVADO en Supabase,
+    // email_confirmed_at se establecerá automáticamente al crear el usuario.
+    // Esta verificación sigue siendo una buena práctica.
     if (!loginData.user.email_confirmed_at) {
         setLoading(false);
-        // It's better to sign out from Supabase if their email is not confirmed but login was technically successful
         await supabase.auth.signOut(); 
         setUser(null);
         toast({
           title: "Email no confirmado",
-          description: "Tu email aún no ha sido confirmado. Por favor, verifica la configuración de tu cuenta o contacta soporte.",
+          description: "Tu email aún no ha sido confirmado. Verifica la configuración de tu cuenta en Supabase o contacta soporte si el problema persiste.",
           variant: "destructive",
         });
         return false;
@@ -130,10 +124,8 @@ export const AuthProvider = ({ children }) => {
         return false;
     }
     
-    // setUser(loginData.user); // This will be handled by onAuthStateChange more reliably
-    // Forcing a fetch of session after login to trigger onAuthStateChange consistently
     await supabase.auth.getSession(); 
-    setLoading(false); // Ensure loading is false before returning
+    setLoading(false); 
     return true;
   };
 

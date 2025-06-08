@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/components/ui/use-toast';
 
 const AdminLogin = () => {
-  const [email, setEmail] = useState('tefita_2025@gmail.com'); 
+  const [email, setEmail] = useState('daniflores6662@gmail.com'); // Actualizado al nuevo email
   const [password, setPassword] = useState('Tefita2025'); 
   const [showPassword, setShowPassword] = useState(false);
   const { login, isAuthenticated, loading: authLoading } = useAuth();
@@ -85,7 +86,7 @@ const AdminLogin = () => {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="tefita_2025@gmail.com"
+                    placeholder="daniflores6662@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 form-input"
