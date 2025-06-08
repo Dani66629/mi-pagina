@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, X } from 'lucide-react';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Shadcn Select
 import { toast } from '@/components/ui/use-toast';
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
@@ -17,20 +18,25 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     price: '',
     status: 'available',
     whatsapp: '',
-    image: null, // Can be File object or existing image_url (string)
-    image_url: '' // To store existing image URL
+    image: null, 
+    image_url: '' 
   });
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState('');
-  const { addProduct, updateProduct } = useStore();
+  const { addProduct, updateProduct, storeConfig } = useStore(); // Added storeConfig
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (product) {
       setFormData({
-        ...product,
-        image: null, // Reset image input field
-        image_url: product.image_url || '' // Keep track of existing URL
+        name: product.name || '',
+        category: product.category || '',
+        description: product.description || '',
+        price: product.price || '',
+        status: product.status || 'available',
+        whatsapp: product.whatsapp || '',
+        image: null, 
+        image_url: product.image_url || ''
       });
       setImagePreview(product.image_url || '');
     } else {
@@ -40,13 +46,13 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         description: '',
         price: '',
         status: 'available',
-        whatsapp: '',
+        whatsapp: storeConfig?.whatsapp || '', // Default to store's WhatsApp
         image: null,
         image_url: ''
       });
       setImagePreview('');
     }
-  }, [product]);
+  }, [product, storeConfig]); // Added storeConfig dependency
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -56,10 +62,14 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     }));
   };
 
+  const handleStatusChange = (value) => {
+    setFormData(prev => ({ ...prev, status: value }));
+  };
+
   const handleImageFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) { 
         toast({
           title: "Error",
           description: "La imagen no puede ser mayor a 5MB",
@@ -78,7 +88,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       reader.readAsDataURL(file);
       setFormData(prev => ({
         ...prev,
-        image: file // Store the File object
+        image: file 
       }));
     }
   };
@@ -87,8 +97,8 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     setImagePreview('');
     setFormData(prev => ({
       ...prev,
-      image: null, // Clear the File object
-      image_url: product ? prev.image_url : '' // Keep existing URL if editing, clear if new
+      image: null, 
+      image_url: product ? prev.image_url : '' 
     }));
     if (fileInputRef.current) {
       fileInputRef.current.value = ''; 
@@ -109,8 +119,9 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
       if (!formData.name.trim()) throw new Error('El nombre del producto es requerido');
       if (!formData.category.trim()) throw new Error('La categoría es requerida');
       if (!formData.price || parseFloat(formData.price) <= 0) throw new Error('El precio debe ser mayor a 0');
-      if (!formData.whatsapp.trim()) throw new Error('El número de WhatsApp es requerido');
-      // Image is optional
+      if (formData.whatsapp && formData.whatsapp.trim() && !/^\+?[1-9]\d{1,14}$/.test(formData.whatsapp.replace(/\s+/g, ''))) {
+         throw new Error('El número de WhatsApp debe estar en formato internacional (ej: +1234567890 o 1234567890)');
+      }
       
       const productPayload = {
         name: formData.name,
@@ -118,17 +129,16 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         description: formData.description,
         price: parseFloat(formData.price),
         status: formData.status,
-        whatsapp: formData.whatsapp,
-        image_url: formData.image_url, // Pass existing URL
-        // 'image' (File object) will be handled by addProduct/updateProduct if new one is selected
+        whatsapp: formData.whatsapp || storeConfig?.whatsapp || '', // Fallback to store WhatsApp
+        image_url: formData.image_url, 
       };
       
-      if (formData.image) { // If a new image File is selected
+      if (formData.image) { 
           productPayload.image = formData.image;
       }
 
 
-      if (product && product.id) { // Ensure product and product.id exist for update
+      if (product && product.id) { 
         await updateProduct(product.id, productPayload);
       } else {
         await addProduct(productPayload);
@@ -213,30 +223,28 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
         <div className="space-y-2">
           <Label htmlFor="status">Estado</Label>
-          <Select
-            id="status"
-            name="status"
-            value={formData.status}
-            onChange={handleInputChange}
-            className="form-input"
-          >
-            <option value="available">Disponible</option>
-            <option value="out-of-stock">Agotado</option>
-            <option value="sold">Vendido</option>
+          <Select value={formData.status} onValueChange={handleStatusChange}>
+            <SelectTrigger className="form-input">
+              <SelectValue placeholder="Selecciona un estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="available">Disponible</SelectItem>
+              <SelectItem value="out-of-stock">Agotado</SelectItem>
+              <SelectItem value="sold">Vendido</SelectItem>
+            </SelectContent>
           </Select>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="whatsapp">WhatsApp de Contacto *</Label>
+        <Label htmlFor="whatsapp">WhatsApp de Contacto (Opcional, si es diferente al de la tienda)</Label>
         <Input
           id="whatsapp"
           name="whatsapp"
           value={formData.whatsapp}
           onChange={handleInputChange}
-          placeholder="+1234567890 (incluir código de país)"
+          placeholder={storeConfig?.whatsapp || "+1234567890 (incluir código de país)"}
           className="form-input"
-          required
         />
       </div>
 
@@ -255,11 +263,11 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
         >
           {imagePreview ? (
             <div className="relative">
-              <img
+              <img 
                 src={imagePreview}
                 alt="Preview"
                 className="max-w-full h-48 object-cover mx-auto rounded-lg"
-              />
+               src="https://images.unsplash.com/photo-1627577741153-74b82d87607b" />
               <Button
                 type="button"
                 variant="destructive"

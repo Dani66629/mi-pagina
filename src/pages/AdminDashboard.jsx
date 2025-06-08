@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +10,7 @@ import {
   Eye,
   ShoppingBag,
   DollarSign,
-  Users as UsersIcon // Renamed to avoid conflict with Users component
+  Users as UsersIcon 
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStore } from '@/contexts/StoreContext';
@@ -26,14 +25,13 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [editingProduct, setEditingProduct] = useState(null);
   const { isAuthenticated, logout, user, loading: authLoading } = useAuth();
-  const { products, storeConfig, loading: storeLoading, refetchData } = useStore();
+  const { products, storeConfig, loadingConfig, loadingProducts, refetchData } = useStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       navigate('/admin');
     }
-    // Refetch data when dashboard loads or user changes, to ensure freshness
     if (isAuthenticated) {
         refetchData();
     }
@@ -63,13 +61,19 @@ const AdminDashboard = () => {
   ];
 
   const renderContent = () => {
-    if (storeLoading && activeTab !== 'overview' && activeTab !== 'settings') { // Allow overview and settings to load some UI even if data is fetching
+    // Show loading if config or products are loading, unless it's settings tab and config is done (even if no config.id)
+    if ( (loadingConfig && activeTab !== 'settings') || (loadingProducts && (activeTab === 'products' || activeTab === 'overview' || activeTab === 'add-product')) ) {
+      if (activeTab === 'settings' && !loadingConfig && !storeConfig.id) {
+        // Allow settings to render if config load is done and there's no ID (first setup)
+      } else {
         return (
             <div className="flex justify-center items-center h-64">
                 <p className="text-xl text-gray-500">Cargando datos...</p>
             </div>
         );
+      }
     }
+
     const currentMenuItem = menuItems.find(item => item.id === activeTab);
     return (
       <div className="space-y-8">
@@ -93,7 +97,7 @@ const AdminDashboard = () => {
                 { title: 'Total Productos', value: stats.totalProducts, icon: Package, color: 'purple', subtext: 'artículos en inventario' },
                 { title: 'Disponibles', value: stats.availableProducts, icon: ShoppingBag, color: 'green', subtext: 'listos para vender' },
                 { title: 'Vendidos', value: stats.soldProducts, icon: UsersIcon, color: 'blue', subtext: 'productos entregados' },
-                { title: 'Valor Inventario', value: `$${stats.totalValue.toFixed(2)}`, icon: DollarSign, color: 'yellow', subtext: 'de productos disponibles' },
+                { title: 'Valor Inventario', value: `${stats.totalValue.toFixed(2)}`, icon: DollarSign, color: 'yellow', subtext: 'de productos disponibles' },
               ].map((stat, idx) => (
                 <motion.div key={stat.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
                   <Card className="admin-card shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
@@ -157,18 +161,31 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
+            {(!storeConfig || !storeConfig.id) && !loadingConfig ? (
+                <div className="text-center p-8 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <Settings className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-yellow-700 mb-2">Configuración de Tienda Requerida</h3>
+                    <p className="text-yellow-600 mb-4">
+                        Antes de agregar productos, por favor completa y guarda la configuración de tu tienda.
+                    </p>
+                    <Button onClick={() => setActiveTab('settings')} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+                        Ir a Configuración
+                    </Button>
+                </div>
+            ) : (
               <ProductForm 
                 product={editingProduct}
                 onSuccess={() => {
                   setEditingProduct(null);
                   setActiveTab('products');
-                  refetchData(); // Refetch after add/edit
+                  refetchData(); 
                 }}
                 onCancel={() => {
                   setEditingProduct(null);
                   setActiveTab(editingProduct ? 'products' : 'overview');
                 }}
               />
+            )}
             </CardContent>
           </Card>
         )}
@@ -188,7 +205,7 @@ const AdminDashboard = () => {
     );
   };
 
-  if (authLoading || (!isAuthenticated && !authLoading)) { // Show loading or redirect if not authenticated
+  if (authLoading || (!isAuthenticated && !authLoading)) { 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
             <p className="text-xl text-gray-600">Cargando panel de administración...</p>
@@ -208,7 +225,7 @@ const AdminDashboard = () => {
         <div className="mb-10 text-center">
           <ShoppingBag className="h-12 w-12 mx-auto mb-3 text-purple-300" />
           <h1 className="text-2xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-blue-300">
-            {storeConfig?.name || "Admin Panel"}
+            {storeConfig?.name && storeConfig.id ? storeConfig.name : "Admin Panel"}
           </h1>
           <p className="text-slate-400 text-xs mt-1 uppercase tracking-wider">Panel de Administración</p>
         </div>
@@ -254,7 +271,7 @@ const AdminDashboard = () => {
         </div>
       </motion.div>
 
-      <main className="flex-1 p-8 lg:p-12 overflow-y-auto ml-72"> {/* ml-72 para compensar el sidebar fijo */}
+      <main className="flex-1 p-8 lg:p-12 overflow-y-auto ml-72"> 
         <motion.div
           key={activeTab} 
           initial={{ opacity: 0, y: 20 }}

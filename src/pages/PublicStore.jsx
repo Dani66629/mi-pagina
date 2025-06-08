@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Phone, Mail, Clock, MessageCircle, Star, Heart, Search, MapPin, Facebook, Instagram, Twitter, Youtube, Info } from 'lucide-react';
@@ -7,24 +8,28 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 
 const PublicStore = () => {
-  const { products, storeConfig } = useStore();
+  const { products, storeConfig, loading: storeContextLoading } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 500); 
-    return () => clearTimeout(timer);
-  }, []);
+    if (!storeContextLoading) {
+      const timer = setTimeout(() => setIsLoading(false), 300); // Small delay for smoother transition
+      return () => clearTimeout(timer);
+    } else {
+      setIsLoading(true);
+    }
+  }, [storeContextLoading]);
 
-  const categories = ['all', ...new Set(products.map(product => product.category))];
+  const categories = ['all', ...new Set(products.map(product => product.category).filter(Boolean))];
   
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    return matchesSearch && matchesCategory && product.status !== 'sold'; // No mostrar productos vendidos
+    return matchesSearch && matchesCategory && product.status !== 'sold';
   });
 
   const getStatusClass = (status) => {
@@ -55,8 +60,10 @@ const PublicStore = () => {
   
   const SocialLink = ({ href, icon: Icon, label, colorClass }) => {
     if (!href) return null;
+    // Ensure href has a protocol
+    const fullHref = href.startsWith('http://') || href.startsWith('https://') ? href : `https://${href}`;
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label}
+      <a href={fullHref} target="_blank" rel="noopener noreferrer" aria-label={label}
          className={`p-2 rounded-full hover:bg-white/20 transition-colors ${colorClass}`}>
         <Icon className="h-6 w-6" />
       </a>
@@ -77,10 +84,9 @@ const PublicStore = () => {
 
   return (
     <div className="min-h-screen font-sans">
-      {/* Hero Section */}
       <section 
         className="hero-section text-white py-24 px-4 relative bg-cover bg-center"
-        style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${storeConfig.bannerImage || 'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?auto=format&fit=crop&w=1600&q=80'})` }}
+        style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(${storeConfig.banner_image_url || 'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?auto=format&fit=crop&w=1600&q=80'})` }}
       >
         <div className="container mx-auto text-center relative z-10 max-w-4xl">
           <motion.div
@@ -89,14 +95,14 @@ const PublicStore = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 tracking-tight">
-              {storeConfig.name}
+              {storeConfig.name || 'Bienvenido a Nuestra Tienda'}
             </h1>
             <p className="text-xl md:text-2xl mb-10 text-purple-100/90 max-w-2xl mx-auto">
-              {storeConfig.slogan}
+              {storeConfig.slogan || 'Descubre productos increíbles.'}
             </p>
-             {storeConfig.storeDescription && (
+             {storeConfig.store_description && (
               <p className="text-md md:text-lg mb-10 text-purple-100/80 max-w-xl mx-auto">
-                {storeConfig.storeDescription}
+                {storeConfig.store_description}
               </p>
             )}
             <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-6">
@@ -108,20 +114,22 @@ const PublicStore = () => {
                 <ShoppingBag className="mr-2 h-5 w-5" />
                 Ver Catálogo
               </Button>
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="border-2 border-white text-white hover:bg-white hover:text-purple-700 shadow-lg transform hover:scale-105 transition-all duration-300 px-8 py-3 text-lg font-semibold rounded-lg"
-                onClick={() => handleWhatsAppContact(storeConfig.whatsapp, `consulta general sobre ${storeConfig.name}`)}
-              >
-                <MessageCircle className="mr-2 h-5 w-5" />
-                Contactar Ahora
-              </Button>
+              {storeConfig.whatsapp && (
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  className="border-2 border-white text-white hover:bg-white hover:text-purple-700 shadow-lg transform hover:scale-105 transition-all duration-300 px-8 py-3 text-lg font-semibold rounded-lg"
+                  onClick={() => handleWhatsAppContact(storeConfig.whatsapp, `consulta general sobre ${storeConfig.name}`)}
+                >
+                  <MessageCircle className="mr-2 h-5 w-5" />
+                  Contactar Ahora
+                </Button>
+              )}
             </div>
           </motion.div>
         </div>
         
-        <div className="absolute inset-0 bg-black/30"></div> {/* Overlay sutil */}
+        <div className="absolute inset-0 bg-black/30"></div>
         <div className="absolute top-20 left-10 animate-bounce-slow opacity-50 hidden md:block">
           <Star className="h-16 w-16 text-yellow-300/50" />
         </div>
@@ -130,7 +138,6 @@ const PublicStore = () => {
         </div>
       </section>
 
-      {/* Search and Filter Section */}
       <section className="py-12 px-4 bg-white sticky top-0 z-30 shadow-md">
         <div className="container mx-auto">
           <motion.div
@@ -168,7 +175,6 @@ const PublicStore = () => {
         </div>
       </section>
 
-      {/* Products Section */}
       <section id="products" className="py-16 px-4 bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container mx-auto">
           <motion.div
@@ -208,7 +214,7 @@ const PublicStore = () => {
                   <Card className="product-card overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 ease-in-out flex flex-col h-full rounded-xl border border-gray-200">
                     <div className="relative">
                       <img 
-                        src={product.image || 'https://images.unsplash.com/photo-1580974928075-ba38599a8462?auto=format&fit=crop&w=600&q=60'} 
+                        src={product.image_url || 'https://images.unsplash.com/photo-1580974928075-ba38599a8462?auto=format&fit=crop&w=600&q=60'} 
                         alt={product.name}
                         className="w-full h-56 object-cover transition-transform duration-300 group-hover:scale-105"
                       />
@@ -231,10 +237,10 @@ const PublicStore = () => {
                           ${typeof product.price === 'number' ? product.price.toFixed(2) : 'N/A'}
                         </span>
                       </div>
-                      {product.status === 'available' && product.whatsapp && (
+                      {product.status === 'available' && (product.whatsapp || storeConfig.whatsapp) && (
                         <Button
                           className="w-full whatsapp-btn text-white font-semibold py-2.5 rounded-md"
-                          onClick={() => handleWhatsAppContact(product.whatsapp, product.name)}
+                          onClick={() => handleWhatsAppContact(product.whatsapp || storeConfig.whatsapp, product.name)}
                         >
                           <MessageCircle className="mr-2 h-5 w-5" />
                           Consultar por WhatsApp
@@ -257,7 +263,6 @@ const PublicStore = () => {
         </div>
       </section>
 
-      {/* Contact Section */}
       <section className="py-20 px-4 bg-gradient-to-r from-purple-700 to-blue-700 text-white">
         <div className="container mx-auto">
           <motion.div
@@ -316,24 +321,23 @@ const PublicStore = () => {
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="bg-slate-900 text-gray-300 py-12 px-4">
         <div className="container mx-auto text-center">
-          <img src="/vite.svg" alt="Logo de la tienda" className="h-12 w-auto mx-auto mb-4 filter grayscale brightness-200" />
+          <img  src="/vite.svg" alt="Logo de la tienda" className="h-12 w-auto mx-auto mb-4 filter grayscale brightness-200" src="https://images.unsplash.com/photo-1485531865381-286666aa80a9" />
           <p className="text-lg font-semibold text-white mb-2">
-            {storeConfig.name}
+            {storeConfig.name || 'Mi Tienda'}
           </p>
           <p className="text-sm text-gray-400 mb-6 max-w-md mx-auto">
-            {storeConfig.storeDescription || storeConfig.slogan}
+            {storeConfig.store_description || storeConfig.slogan || 'Gracias por visitarnos.'}
           </p>
           <div className="flex justify-center space-x-6 mb-8">
             <SocialLink href={storeConfig.facebook} icon={Facebook} label="Facebook" colorClass="text-blue-400 hover:text-blue-300"/>
             <SocialLink href={storeConfig.instagram} icon={Instagram} label="Instagram" colorClass="text-pink-400 hover:text-pink-300"/>
             <SocialLink href={storeConfig.twitter} icon={Twitter} label="Twitter/X" colorClass="text-sky-400 hover:text-sky-300"/>
-            <SocialLink href={storeConfig.tiktok} icon={Youtube} label="TikTok" colorClass="text-red-400 hover:text-red-300"/> {/* Usando Youtube icon como placeholder para TikTok */}
+            <SocialLink href={storeConfig.tiktok} icon={Youtube} label="TikTok" colorClass="text-red-400 hover:text-red-300"/>
           </div>
           <p className="text-xs text-gray-500">
-            © {new Date().getFullYear()} {storeConfig.name}. Todos los derechos reservados.
+            © {new Date().getFullYear()} {storeConfig.name || 'Mi Tienda'}. Todos los derechos reservados.
           </p>
            <p className="text-xs text-gray-600 mt-1">
             Diseñado con ❤️ por Hostinger Horizons

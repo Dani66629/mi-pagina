@@ -15,7 +15,7 @@ export const useStore = () => {
 const initialStoreConfigFallback = {
   id: null,
   name: 'Tu Tienda Online',
-  slogan: 'Cargando configuración...',
+  slogan: 'Configura tu tienda',
   banner_image_url: '',
   store_description: '',
   email: '',
@@ -25,7 +25,9 @@ const initialStoreConfigFallback = {
   instagram: '',
   twitter: '',
   tiktok: '',
-  schedule: ''
+  schedule: '',
+  created_at: null, 
+  updated_at: null,
 };
 
 export const StoreProvider = ({ children }) => {
@@ -39,21 +41,19 @@ export const StoreProvider = ({ children }) => {
     const { data, error } = await supabase
       .from('store_config')
       .select('*')
-      .limit(1) // Assuming one config row
-      .single(); 
+      .limit(1)
+      .maybeSingle(); // Use maybeSingle() to allow 0 or 1 row without error
 
     if (error) {
       console.error('Error fetching store config:', error);
       toast({ title: "Error", description: "No se pudo cargar la configuración de la tienda.", variant: "destructive" });
-      setStoreConfig(initialStoreConfigFallback); // Fallback on error
+      setStoreConfig(initialStoreConfigFallback);
     } else if (data) {
       setStoreConfig(data);
     } else {
-      // No config found, insert a default one if this is the first run for an admin.
-      // This part is tricky because anonymous users might trigger this.
-      // Best to ensure an admin creates the first config row through the UI or a seed script.
+      // No config found, this is normal for the first setup.
       console.warn('No store config found. Please set up store configuration in admin panel.');
-      setStoreConfig(initialStoreConfigFallback); // Fallback
+      setStoreConfig(initialStoreConfigFallback); // Ensures id is null
     }
     setLoadingConfig(false);
   }, []);
@@ -82,11 +82,16 @@ export const StoreProvider = ({ children }) => {
   
   const addProduct = async (productData) => {
     const { image, ...restOfProductData } = productData;
-    let imageUrl = productData.image_url || ''; // Keep existing URL if not changing image
+    let imageUrl = productData.image_url || '';
 
-    if (image instanceof File) { // Check if 'image' is a File object for new uploads
+    if (!storeConfig || !storeConfig.id) {
+      toast({ title: "Configuración Requerida", description: "Primero debes guardar la configuración de la tienda antes de agregar productos.", variant: "destructive" });
+      return;
+    }
+
+    if (image instanceof File) {
       const fileExt = image.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
+      const fileName = `product_${Date.now()}.${fileExt}`;
       const filePath = `public/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -100,11 +105,11 @@ export const StoreProvider = ({ children }) => {
       }
       const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
       imageUrl = publicUrlData.publicUrl;
-    } else if (typeof image === 'string' && image.startsWith('data:image')) { // Handle base64 new uploads
+    } else if (typeof image === 'string' && image.startsWith('data:image')) {
        const response = await fetch(image);
        const blob = await response.blob();
-       const fileExt = blob.type.split('/')[1];
-       const fileName = `${Date.now()}.${fileExt}`;
+       const fileExt = blob.type.split('/')[1] || 'png';
+       const fileName = `product_${Date.now()}.${fileExt}`;
        const filePath = `public/${fileName}`;
        
        const { error: uploadError } = await supabase.storage
@@ -120,16 +125,21 @@ export const StoreProvider = ({ children }) => {
       imageUrl = publicUrlData.publicUrl;
     }
 
+    const productToInsert = { 
+      ...restOfProductData, 
+      image_url: imageUrl, 
+      store_config_id: storeConfig.id 
+    };
 
     const { data, error } = await supabase
       .from('products')
-      .insert([{ ...restOfProductData, image_url: imageUrl, store_config_id: storeConfig.id }])
+      .insert([productToInsert])
       .select()
       .single();
 
     if (error) {
       console.error('Error adding product:', error);
-      toast({ title: "Error", description: "No se pudo agregar el producto.", variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo agregar el producto: ${error.message}`, variant: "destructive" });
     } else if (data) {
       setProducts(prev => [data, ...prev]);
       toast({ title: "¡Éxito!", description: "Producto agregado correctamente." });
@@ -142,7 +152,7 @@ export const StoreProvider = ({ children }) => {
     
     if (image instanceof File) {
       const fileExt = image.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
+      const fileName = `product_${Date.now()}.${fileExt}`;
       const filePath = `public/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -157,19 +167,18 @@ export const StoreProvider = ({ children }) => {
       const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
       imageUrl = publicUrlData.publicUrl;
 
-      // Optionally delete old image if a new one is uploaded and an old one existed
       const oldProduct = products.find(p => p.id === id);
-      if (oldProduct && oldProduct.image_url) {
+      if (oldProduct && oldProduct.image_url && oldProduct.image_url !== imageUrl) {
         const oldImageName = oldProduct.image_url.split('/').pop();
         if (oldImageName) {
             await supabase.storage.from('product-images').remove([`public/${oldImageName}`]);
         }
       }
-    } else if (typeof image === 'string' && image.startsWith('data:image') && image !== productData.image_url) { // Handle base64 updates
+    } else if (typeof image === 'string' && image.startsWith('data:image') && image !== productData.image_url) {
        const response = await fetch(image);
        const blob = await response.blob();
-       const fileExt = blob.type.split('/')[1];
-       const fileName = `${Date.now()}.${fileExt}`;
+       const fileExt = blob.type.split('/')[1] || 'png';
+       const fileName = `product_${Date.now()}.${fileExt}`;
        const filePath = `public/${fileName}`;
        
        const { error: uploadError } = await supabase.storage
@@ -185,7 +194,7 @@ export const StoreProvider = ({ children }) => {
       imageUrl = publicUrlData.publicUrl;
 
       const oldProduct = products.find(p => p.id === id);
-      if (oldProduct && oldProduct.image_url) {
+      if (oldProduct && oldProduct.image_url && oldProduct.image_url !== imageUrl) {
         const oldImageName = oldProduct.image_url.split('/').pop();
          if (oldImageName) {
             await supabase.storage.from('product-images').remove([`public/${oldImageName}`]);
@@ -193,17 +202,22 @@ export const StoreProvider = ({ children }) => {
       }
     }
 
+    const productToUpdate = { 
+      ...restOfProductData, 
+      image_url: imageUrl, 
+      updated_at: new Date().toISOString() 
+    };
 
     const { data, error } = await supabase
       .from('products')
-      .update({ ...restOfProductData, image_url: imageUrl, updated_at: new Date().toISOString() })
+      .update(productToUpdate)
       .eq('id', id)
       .select()
       .single();
     
     if (error) {
       console.error('Error updating product:', error);
-      toast({ title: "Error", description: "No se pudo actualizar el producto.", variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo actualizar el producto: ${error.message}`, variant: "destructive" });
     } else if (data) {
       setProducts(prev => prev.map(p => (p.id === id ? data : p)));
       toast({ title: "¡Éxito!", description: "Producto actualizado correctamente." });
@@ -220,9 +234,8 @@ export const StoreProvider = ({ children }) => {
 
     if (error) {
       console.error('Error deleting product:', error);
-      toast({ title: "Error", description: "No se pudo eliminar el producto.", variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo eliminar el producto: ${error.message}`, variant: "destructive" });
     } else {
-      // Delete image from storage
       if (productToDelete && productToDelete.image_url) {
         const imageName = productToDelete.image_url.split('/').pop();
         if (imageName) {
@@ -245,7 +258,7 @@ export const StoreProvider = ({ children }) => {
         const filePath = `public/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('product-images') // Using the same bucket for convenience
+            .from('product-images')
             .upload(filePath, bannerImage);
 
         if (uploadError) {
@@ -256,7 +269,7 @@ export const StoreProvider = ({ children }) => {
         const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
         bannerImageUrl = publicUrlData.publicUrl;
         
-        if (storeConfig.banner_image_url) {
+        if (storeConfig && storeConfig.id && storeConfig.banner_image_url && storeConfig.banner_image_url !== bannerImageUrl) {
             const oldImageName = storeConfig.banner_image_url.split('/').pop();
              if (oldImageName) {
                 await supabase.storage.from('product-images').remove([`public/${oldImageName}`]);
@@ -266,7 +279,7 @@ export const StoreProvider = ({ children }) => {
     } else if (typeof bannerImage === 'string' && bannerImage.startsWith('data:image') && bannerImage !== configData.banner_image_url) {
        const response = await fetch(bannerImage);
        const blob = await response.blob();
-       const fileExt = blob.type.split('/')[1];
+       const fileExt = blob.type.split('/')[1] || 'png';
        const fileName = `banner_${Date.now()}.${fileExt}`;
        const filePath = `public/${fileName}`;
        
@@ -282,7 +295,7 @@ export const StoreProvider = ({ children }) => {
       const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
       bannerImageUrl = publicUrlData.publicUrl;
 
-       if (storeConfig.banner_image_url) {
+       if (storeConfig && storeConfig.id && storeConfig.banner_image_url && storeConfig.banner_image_url !== bannerImageUrl) {
             const oldImageName = storeConfig.banner_image_url.split('/').pop();
              if (oldImageName) {
                 await supabase.storage.from('product-images').remove([`public/${oldImageName}`]);
@@ -290,25 +303,31 @@ export const StoreProvider = ({ children }) => {
         }
     }
 
-
     const configToSave = {
         ...restOfConfigData,
         banner_image_url: bannerImageUrl,
         updated_at: new Date().toISOString()
     };
     
-    // Ensure ID is present for update, or handle insert if it's the first time
+    const currentConfigId = storeConfig?.id; // Capture current ID before potential modification
+
+    if (!currentConfigId) { // If inserting, remove fields that DB should auto-generate or that are not part of the payload
+      delete configToSave.id; 
+      delete configToSave.created_at; 
+    } else { // If updating, ensure ID is part of the payload for clarity, even if not strictly needed by Supabase update
+      configToSave.id = currentConfigId;
+    }
+    
+
     let response;
-    if (storeConfig && storeConfig.id) {
+    if (currentConfigId) {
         response = await supabase
             .from('store_config')
             .update(configToSave)
-            .eq('id', storeConfig.id)
+            .eq('id', currentConfigId)
             .select()
             .single();
     } else {
-        // This case should ideally be handled by an initial setup by an admin
-        // For now, we'll try to insert if no ID exists (might fail based on RLS if not admin)
         response = await supabase
             .from('store_config')
             .insert(configToSave)
@@ -320,13 +339,12 @@ export const StoreProvider = ({ children }) => {
 
     if (error) {
       console.error('Error updating store config:', error);
-      toast({ title: "Error", description: "No se pudo guardar la configuración.", variant: "destructive" });
+      toast({ title: "Error", description: `No se pudo guardar la configuración: ${error.message}`, variant: "destructive" });
     } else if(data) {
-      setStoreConfig(data);
+      setStoreConfig(data); // This will now have an ID if it was an insert
       toast({ title: "¡Éxito!", description: "Configuración guardada correctamente." });
     }
   };
-
 
   const value = {
     products,
@@ -335,7 +353,9 @@ export const StoreProvider = ({ children }) => {
     updateProduct,
     deleteProduct,
     updateStoreConfig,
-    loading: loadingConfig || loadingProducts,
+    loadingConfig, // expose individual loading states
+    loadingProducts,
+    loading: loadingConfig || loadingProducts, // keep combined loading for general use
     refetchData: () => {
       fetchStoreConfig();
       fetchProducts();

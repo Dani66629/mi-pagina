@@ -8,23 +8,44 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 
+const initialFormData = {
+  name: '',
+  slogan: '',
+  bannerImage: null,
+  banner_image_url: '',
+  store_description: '',
+  email: '',
+  phone: '',
+  whatsapp: '',
+  facebook: '',
+  instagram: '',
+  twitter: '',
+  tiktok: '',
+  schedule: '',
+};
+
 const StoreSettings = () => {
-  const { storeConfig, updateStoreConfig, loading: storeLoading } = useStore();
-  const [formData, setFormData] = useState(storeConfig);
-  const [formLoading, setFormLoading] = useState(false); // Separate loading state for form submission
+  const { storeConfig, updateStoreConfig, loadingConfig } = useStore();
+  const [formData, setFormData] = useState(initialFormData);
+  const [formLoading, setFormLoading] = useState(false);
   const [bannerPreview, setBannerPreview] = useState('');
   const bannerFileInputRef = useRef(null);
 
   useEffect(() => {
-    if (storeConfig && storeConfig.id) { // Check if storeConfig has loaded
+    if (!loadingConfig) { // Wait for config to load or fail
+      if (storeConfig && storeConfig.id) {
         setFormData({
           ...storeConfig,
-          bannerImage: null, // For new file input
-          banner_image_url: storeConfig.banner_image_url || '' // Existing URL
+          bannerImage: null, 
         });
         setBannerPreview(storeConfig.banner_image_url || '');
+      } else {
+        // No existing config or config with no ID (initial state)
+        setFormData(initialFormData);
+        setBannerPreview('');
+      }
     }
-  }, [storeConfig]);
+  }, [storeConfig, loadingConfig]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -37,7 +58,7 @@ const StoreSettings = () => {
   const handleBannerFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         toast({
           title: "Error",
           description: "La imagen no puede ser mayor a 5MB",
@@ -56,7 +77,7 @@ const StoreSettings = () => {
       reader.readAsDataURL(file);
       setFormData(prev => ({
         ...prev,
-        bannerImage: file // Store the File object
+        bannerImage: file 
       }));
     }
   };
@@ -65,8 +86,8 @@ const StoreSettings = () => {
     setBannerPreview('');
     setFormData(prev => ({
       ...prev,
-      bannerImage: null, // Clear File object
-      banner_image_url: storeConfig ? prev.banner_image_url : ''
+      bannerImage: null, 
+      banner_image_url: storeConfig && storeConfig.id ? prev.banner_image_url : '' // Keep existing URL if editing, clear if new
     }));
     if (bannerFileInputRef.current) {
       bannerFileInputRef.current.value = '';
@@ -85,15 +106,16 @@ const StoreSettings = () => {
 
     try {
       if (!formData.name || !formData.name.trim()) throw new Error('El nombre de la tienda es requerido');
-      if (!formData.email || !formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) throw new Error('El email no es válido');
-      if (!formData.phone || !formData.phone.trim()) throw new Error('El teléfono es requerido');
-      if (formData.whatsapp && formData.whatsapp.trim() && !/^\+[1-9]\d{1,14}$/.test(formData.whatsapp.replace(/\s+/g, ''))) {
+      if (formData.email && formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email)) throw new Error('El email no es válido');
+      // Removed required for phone and email to allow more flexibility for initial setup
+      
+      if (formData.whatsapp && formData.whatsapp.trim() && !/^\+?[1-9]\d{1,14}$/.test(formData.whatsapp.replace(/\s+/g, ''))) {
          throw new Error('El número de WhatsApp debe estar en formato internacional (ej: +1234567890)');
       }
 
       const configPayload = { ...formData };
-      // bannerImage (File object) will be handled by updateStoreConfig
-      // banner_image_url is already part of formData
+      // If storeConfig.id exists, it will be part of configPayload via spread.
+      // If it's a new config, storeConfig.id will be null and updateStoreConfig handles it.
       
       await updateStoreConfig(configPayload);
       
@@ -128,9 +150,14 @@ const StoreSettings = () => {
     );
   };
 
-  if (storeLoading && !storeConfig.id) { // Show loading state if initial config isn't loaded yet
-    return <p>Cargando configuración de la tienda...</p>;
+  if (loadingConfig && !storeConfig.id) { 
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-xl text-gray-500">Cargando configuración...</p>
+      </div>
+    );
   }
+
 
   return (
     <motion.form
@@ -196,11 +223,10 @@ const StoreSettings = () => {
             >
             {bannerPreview ? (
                 <div className="relative">
-                <img
-                    src={bannerPreview}
-                    alt="Banner preview"
-                    className="max-w-full h-32 object-cover mx-auto rounded-lg"
-                />
+                  <img 
+                      src={bannerPreview}
+                      alt="Banner preview"
+                      className="max-w-full h-32 object-cover mx-auto rounded-lg" src="https://images.unsplash.com/photo-1702179638505-3bd27ed27e8e" />
                 <Button
                     type="button"
                     variant="destructive"
@@ -237,7 +263,7 @@ const StoreSettings = () => {
       <SectionCard title="Datos de Contacto y Vendedor" icon={UserCircle}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <Label htmlFor="email">Email de Contacto *</Label>
+            <Label htmlFor="email">Email de Contacto</Label>
             <Input
               id="email"
               name="email"
@@ -246,12 +272,11 @@ const StoreSettings = () => {
               onChange={handleInputChange}
               placeholder="contacto@mitienda.com"
               className="form-input"
-              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Teléfono *</Label>
+            <Label htmlFor="phone">Teléfono</Label>
             <Input
               id="phone"
               name="phone"
@@ -259,7 +284,6 @@ const StoreSettings = () => {
               onChange={handleInputChange}
               placeholder="+1234567890"
               className="form-input"
-              required
             />
           </div>
         </div>
@@ -347,7 +371,7 @@ const StoreSettings = () => {
         <Button
           type="submit"
           className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-lg py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
-          disabled={formLoading || storeLoading}
+          disabled={formLoading || loadingConfig}
         >
           <Save className="mr-2 h-5 w-5" />
           {formLoading ? 'Guardando...' : 'Guardar Configuración'}
